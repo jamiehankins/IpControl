@@ -1,5 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Media;
+using System.Net;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -14,301 +18,499 @@ namespace IntruderLeather.Controls.IpAddress
             DefaultStyleKeyProperty.OverrideMetadata(typeof(IpAddressControl), new FrameworkPropertyMetadata(typeof(IpAddressControl)));
         }
 
-        private bool IsDigit(KeyEventArgs e)
+        public IpAddressControl()
         {
-            bool isDigit =
-                ((e.Key >= Key.D0 && e.Key < Key.D9)
-                    || (e.Key >= Key.NumPad0 && e.Key < Key.NumPad9))
-                    && !IsShift(e);
+            // Until I work out how to keep undo from getting us into unsupported
+            // situations, I'm going to remove undo/redo. The issue is that we do
+            // a lot of adding steps to autoformat things when the user is typing.
+            // When we allow undo, it sees our changes as individual edits and
+            // and allows the user to undo them without the user change that triggered
+            // them, which can result in an invalid address. There is functionality
+            // to start and end an edit so that undo/redo does it correctly. For that
+            // to work, we need to start the edit before the change that triggers the
+            // formatting and end after the formatting. That will take a little work.
+            IsUndoEnabled = false;
+        }
+
+        private bool IsDigit(char c)
+        {
+            bool isDigit = c >= '0' && c <= '9';
             if (IPV6 && !isDigit)
             {
-                isDigit = e.Key >= Key.A && e.Key <= Key.F;
-            }
-            return isDigit;
-        }
-        private bool IsShift(KeyEventArgs e)
-        {
-            return e.KeyboardDevice.Modifiers == ModifierKeys.Shift;
-        }
-
-        private bool IsSeparator(KeyEventArgs e)
-        {
-            return (IPV6 && e.Key == Key.OemSemicolon && IsShift(e))
-                || (!IPV6 && (e.Key == Key.OemPeriod || e.Key == Key.Decimal) && !IsShift(e));
-        }
-
-        private bool IsValidControlKey(KeyEventArgs e)
-        {
-            return e.Key == Key.Back
-                || e.Key == Key.Delete
-                || e.Key == Key.Left
-                || e.Key == Key.Right
-                || e.Key == Key.Home
-                || e.Key == Key.End;
-        }
-
-        private bool IsValidKey(KeyEventArgs e)
-        {
-            return IsDigit(e) || IsSeparator(e) || IsValidControlKey(e);
-        }
-
-        bool IsDigit(int index)
-        {
-            bool isDigit = Text[index] >= '0' && Text[index] <= '9';
-            if (!isDigit && IPV6)
-            {
-                isDigit = Text[index] >= 'A' && Text[index] <= 'F';
+                isDigit = (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
             }
             return isDigit;
         }
 
-        private string GetAddressComponent(int index)
+        private bool IsDigit(int index)
         {
-            int start = index;
-            int length = 0;
-            while (start > 0 && IsDigit(start - 1))
-            {
-                --start;
-            }
-            while (start + length < Text.Length && IsDigit(start + length))
-            {
-                ++length;
-            }
-            return Text.Substring(start, length);
-
+            return IsDigit(Text[index]);
         }
 
-        private void NormalizeComponent(int index = -1)
+        private bool _normalizing = false;
+        private bool _setting = false;
+        private void SetText(string text)
         {
-            int start = index == -1 ? CaretIndex : index;
-            int length = 0;
-            while (start > 0 && IsDigit(start - 1)) --start;
-            while (start + length < Text.Length && IsDigit(start + length)) ++length;
-            string component = string.Empty;
-            foreach (char c in Text.Substring(start, length))
-            {
-                if (!CanAppendToAddressComponent(component, int.Parse(c.ToString())))
-                {
-                    break;
-                }
-                component += c;
-            }
-            Text = Text.Substring(0, start) + component + Text.Substring(start + length);
-            CaretIndex = start + component.Length;
-        }
-
-        private bool CanAppendToAddressComponent(string current, int digit)
-        {
-            if (IPV6)
-            {
-                return current.Length < 4;
-            }
-            int currentVal = string.IsNullOrWhiteSpace(current)
-                ? 0 : int.Parse(current) * 10;
-            return current.Length < 3 && currentVal + digit <= 255;
-        }
-
-        private int GetDigit(KeyEventArgs e)
-        {
-            if (e.Key >= Key.D0 && e.Key <= Key.D9)
-            {
-                return e.Key - Key.D0;
-            }
-            else if (e.Key >= Key.NumPad0 && e.Key <= Key.NumPad9)
-            {
-                return e.Key - Key.NumPad0;
-            }
-            else
-            {
-                return e.Key - Key.A;
-            }
-        }
-
-        private string GetDigitString(KeyEventArgs e)
-        {
-            return GetDigit(e).ToString("X");
-        }
-
-        private int CaretComponent => Text.Substring(0, CaretIndex).Split(Separator).Length - 1;
-
-        private bool _needsFormatting = false;
-
-        private void Reformat()
-        {
-            _needsFormatting = false;
-            int component = CaretComponent;
-            IEnumerable<string> components = IPV6
-                ? Text.Split(Separator).Select(t => string.IsNullOrEmpty(t) ? string.Empty : int.Parse(t).ToString("X4"))
-                : Text.Split(Separator).Select(t => string.IsNullOrEmpty(t) ? string.Empty : int.Parse(t).ToString());
-            Text = string.Join(Separator, components);
-            for (int i = 0; i < Text.Length; ++i)
-            {
-                if (Text[i] == Separator)
-                {
-                    if (component == 0)
-                    {
-                        CaretIndex = i;
-                        return;
-                    }
-                    --component;
-                }
-            }
-            CaretIndex = Text.Length;
+            _setting = true;
+            Text = text;
+            _setting = false;
         }
 
         private char Separator => IPV6 ? ':' : '.';
 
         private bool CanAddSeparator => Text.Count(c => c == Separator) < 3;
 
-        private void HandleSeparator(KeyEventArgs e)
+        private bool HandleSeparator()
         {
+            bool result = true;
             int caretIndex = CaretIndex;
 
+            // If the user had text selected, it gets a lot harder.
+            if (SelectionLength > 0)
+            {
+                // There either needs to be at least one separator selected or
+                // less than three separators already.
+                if (SelectedText.Contains(Separator)
+                    || Text.Count(c => c == Separator) < 3)
+                {
+                    SelectedText = Separator.ToString();
+                    CaretIndex++;
+                    // Incrementing the index gets the previous section formatted,
+                    // but we want to format the new section, too.
+                    new AddressComponent(this).Normalize();
+                }
+                else
+                {
+                    result = false;
+                }
+            }
             // The simplest case is when the next character is a separator.
             // Just increment the cursor.
-            if (Text.Length > CaretIndex && Text[CaretIndex] == Separator)
+            else if (Text.Length > CaretIndex && Text[CaretIndex] == Separator)
             {
                 ++CaretIndex;
-                e.Handled = true;
             }
             // If we're at the beginning of the address or the previous character
             // is a separator, add an empty component.
             else if (CaretIndex == 0 || Text[CaretIndex - 1] == Separator)
             {
-                e.Handled = true;
                 if (CanAddSeparator)
                 {
-                    string zeroComponent = IPV6 ? Separator + Text : "0" + Separator;
-                    Text = Text.Substring(0, caretIndex) + zeroComponent + Text.Substring(caretIndex);
+                    string zeroComponent = IPV6 ? Separator.ToString() : "0" + Separator;
+                    SetText(Text.Insert(caretIndex, zeroComponent));
                     CaretIndex = caretIndex + zeroComponent.Length;
-                    if (Text.Length > zeroComponent.Length)
-                    {
-                        NormalizeComponent();
-                    }
+                }
+                else
+                {
+                    // The negative case here does nothing since you can't insert
+                    // another separator.
+                    result = false;
                 }
             }
-            // If none of the above are true, and we already have enough
-            // components, do nothing. Otherwise, let the default process do it.
-            else if (!CanAddSeparator)
+            // Otherwise, just add the separator.
+            else if (CanAddSeparator)
             {
-                e.Handled = true;
+                InsertChar(Separator);
             }
-            return;
+            else
+            {
+                result = false;
+            }
+            return result;
         }
 
-        #region Event Handlers
-        protected override void OnKeyDown(KeyEventArgs e)
+        protected override void OnInitialized(EventArgs e)
         {
-            // We filter bad characters in the OnPreviewKeyDown handler, so we
-            // will just assume that if we're here, it's a character that we're
-            // expecting.
+            base.OnInitialized(e);
+            DataObject.AddPastingHandler(this, OnPasting);
+            DataObject.AddCopyingHandler(this, OnCopying);
+            Dispatcher.ShutdownStarted += OnShutdownStarted;
+            CommandManager.AddPreviewExecutedHandler(this, OnPreviewExecuted);
+        }
 
-            int caretIndex = CaretIndex;
+        private void OnShutdownStarted(object sender, EventArgs e)
+        {
+            DataObject.RemovePastingHandler(this, OnPasting);
+            DataObject.RemoveCopyingHandler(this, OnCopying);
+            Dispatcher.ShutdownStarted -= OnShutdownStarted;
+            CommandManager.RemovePreviewExecutedHandler(this, OnPreviewExecuted);
+        }
 
-            // We'll let the system handle cursor manipulation.
-            if (e.Key == Key.Left
-                || e.Key == Key.Right
-                || e.Key == Key.Home
-                || e.Key == Key.End) return;
-
-            // If we're at the end of the line, let the system handle
-            // backspace.
-            if (e.Key == Key.Back && CaretIndex == Text.Length) return;
-
-            // If we're deleting, and it goes to the end, let the system handle it.
-            if (e.Key == Key.Delete
-                || e.Key == Key.Back
-                && CaretIndex + SelectionLength == Text.Length) return;
-
-            // Handle the separator.
-            if (IsSeparator(e))
+        private bool _cut = false;
+        private void OnPreviewExecuted(object sender, ExecutedRoutedEventArgs e)
+        {
+            if (e.Command == ApplicationCommands.Cut)
             {
-                HandleSeparator(e);
-                return;
+                if (SelectionLength == 0)
+                {
+                    SelectAll();
+                }
+                _cut = true;
             }
+            else if (e.Command == ApplicationCommands.Copy)
+            {
+                if (SelectionLength == 0)
+                {
+                    SelectAll();
+                }
+                _cut = false;
+            }
+        }
 
+        private bool HandleDeleteAndBackspace(bool delete = true)
+        {
             // If nothing is selected, and backspace or delete is pressed,
             // select something to delete.
             if (SelectionLength == 0)
             {
                 // If it's a delete, select the next character.
-                if (e.Key == Key.Delete && CaretIndex < Text.Length)
+                if (delete && CaretIndex < Text.Length)
                 {
                     SelectionLength = 1;
                 }
-                // If it's backspace, select the previous character.
-                else if (e.Key == Key.Back && CaretIndex > 0)
+                else if (!delete && CaretIndex > 0)
                 {
                     --CaretIndex;
                     SelectionLength = 1;
                 }
             }
-
-            // Handle deleting selection.
+            // Now, if we had anything selected or selected anything above,
+            // delete it.
             if (SelectionLength > 0)
             {
+                bool normalize = SelectedText.Any(c => c == Separator);
                 SelectedText = string.Empty;
-                NormalizeComponent();
-            }
-
-            // Handle a new digit.
-            if (IsDigit(e))
-            {
-                if (CaretIndex != Text.Length)
+                if (normalize)
                 {
-                    Text = Text.Insert(CaretIndex, GetDigitString(e));
-                    e.Handled = true;
-                    CaretIndex = caretIndex + 1;
-                    NormalizeComponent();
-                }
-                else
-                {
-                    string current = GetAddressComponent(CaretIndex);
-                    if (!CanAppendToAddressComponent(current, GetDigit(e)))
-                    {
-                        if (CanAddSeparator)
-                        {
-                            int caret = CaretIndex;
-                            Text += Separator;
-                            CaretIndex = caret + 1;
-                        }
-                        else
-                        {
-                            e.Handled = true;
-                        }
-                    }
+                    new AddressComponent(this).Normalize();
                 }
             }
+            return true;
         }
 
-        protected override void OnKeyUp(KeyEventArgs e)
+        private void Error()
         {
-            base.OnKeyUp(e);
-            if (_needsFormatting)
+            SystemSounds.Asterisk.Play();
+        }
+
+        #region Event Handlers
+        private int _lastCaret = -1;
+        protected override void OnSelectionChanged(RoutedEventArgs e)
+        {
+            base.OnSelectionChanged(e);
+            if (!_setting)
             {
-                Reformat();
+                if (!_normalizing
+                    && _lastCaret != -1
+                    && _lastCaret != CaretIndex
+                    && Text.Length >= _lastCaret
+                    && SelectionLength == 0)
+                {
+                    var component = new AddressComponent(this, _lastCaret);
+                    if (CaretIndex < component.Start
+                        || CaretIndex > component.Start + component.Length)
+                    {
+                        component.Normalize();
+                    }
+                }
+                _lastCaret = CaretIndex;
             }
         }
 
         protected override void OnPreviewKeyDown(KeyEventArgs e)
         {
-            // First, filter keys that are never right.
-            if (!IsValidKey(e))
-            {
-                e.Handled = true;
-            }
-            // Let's feed backspace through the main filter.
+            bool handled = false;
             if (e.Key == Key.Back || e.Key == Key.Delete)
             {
-                OnKeyDown(e);
+                if (HandleDeleteAndBackspace(e.Key == Key.Delete))
+                {
+                    e.Handled = handled = true;
+                }
+            }
+            if (!handled) base.OnPreviewKeyDown(e);
+        }
+
+        protected override void OnTextInput(TextCompositionEventArgs e)
+        {
+            if (e.Text.Any(c => c == Separator || IsDigit(c)))
+            {
+                foreach (char c in e.Text.ToUpper())
+                {
+                    int caretIndex = CaretIndex;
+                    if (c == Separator)
+                    {
+                        if (!HandleSeparator())
+                        {
+                            Error();
+                        }
+                    }
+                    else if (IsDigit(c))
+                    {
+                        // Now, if we had anything selected or selected anything above,
+                        // delete it.
+                        if (SelectionLength > 0)
+                        {
+                            HandleDeleteAndBackspace();
+                        }
+                        var component = new AddressComponent(this);
+                        if (!component.Insert(c))
+                        {
+                            if (HandleSeparator())
+                            {
+                                component = new AddressComponent(this);
+                                if (!component.Insert(c))
+                                {
+                                    Error();
+                                }
+                            }
+                            else
+                            {
+                                Error();
+                            }
+                        }
+                    }
+                }
+            }
+            e.Handled = true;
+        }
+
+        void InsertChar(char ch)
+        {
+            int caretIndex = CaretIndex;
+            SetText(Text.Insert(CaretIndex, ch.ToString()));
+            CaretIndex = caretIndex + 1;
+        }
+
+        private void Set(string address)
+        {
+            var eventArgs = new TextCompositionEventArgs(
+                InputManager
+                    .Current
+                    .PrimaryKeyboardDevice,
+                new TextComposition(
+                    InputManager
+                    .Current,
+                    this,
+                    address));
+            eventArgs.RoutedEvent = TextCompositionManager.PreviewTextInputStartEvent;
+            RaiseEvent(eventArgs);
+            eventArgs.RoutedEvent = TextCompositionManager.TextInputStartEvent;
+            RaiseEvent(eventArgs);
+            eventArgs.RoutedEvent = TextCompositionManager.PreviewTextInputEvent;
+            RaiseEvent(eventArgs);
+            eventArgs.RoutedEvent = TextCompositionManager.TextInputEvent;
+            RaiseEvent(eventArgs);
+        }
+
+        private void OnPasting(object sender, DataObjectPastingEventArgs e)
+        {
+            var isText = e.SourceDataObject.GetDataPresent(DataFormats.UnicodeText, true);
+            if (!isText) return;
+            var text = e.SourceDataObject.GetData(DataFormats.UnicodeText) as string;
+            if (SelectionLength == 0)
+            {
+                Set(text);
+            }
+            e.Handled = true;
+            e.CancelCommand();
+        }
+
+        private void OnCopying(object sender, DataObjectCopyingEventArgs e)
+        {
+            if (SelectionLength == 0)
+            {
+
             }
         }
         #endregion
 
         public bool IPV6 { get; set; }
-        private byte[] _ipV4Bytes = new byte[4];
-        private ushort[] _ipV6Shorts = new ushort[4];
-        public System.Net.IPAddress IPAddress { get; set; }
-        public string IPAddressText { get; set; }
+        public IPAddress IPAddress
+        {
+            get
+            {
+                if (!IPAddress.TryParse(Text, out IPAddress address))
+                {
+                    address = new IPAddress(0);
+                }
+                return address;
+            }
+            set
+            {
+                Set(value.ToString());
+            }
+        }
+
+        private class AddressComponent
+        {
+            private int _index;
+            private IpAddressControl _control;
+            private int Cursor => _index == -1 ? CaretIndex : _index;
+            private int CaretIndex
+            {
+                get => _control?.CaretIndex ?? -1;
+                set => _control.CaretIndex = value;
+            }
+            private string Text
+            {
+                get => _control?.Text ?? string.Empty;
+                set => _control.SetText(value);
+            }
+            private int SelectionLength => _control?.SelectionLength ?? -1;
+            private bool IPV6 => _control?.IPV6 ?? false;
+
+            public AddressComponent(IpAddressControl control, int index = -1)
+            {
+                _control = control;
+                _index = index;
+            }
+            public int Start
+            {
+                get
+                {
+                    int start = Cursor;
+                    while (start > 0 && _control.IsDigit(Text[start - 1])) --start;
+                    return start;
+                }
+            }
+
+            public int Length
+            {
+                get
+                {
+                    int length = 0;
+                    while (Start + length < Text.Length && _control.IsDigit(Start + length)) ++length;
+                    return length;
+                }
+            }
+
+            public void Normalize()
+            {
+                StringBuilder sb = new StringBuilder();
+                int value = 0;
+                foreach (char c in ToString())
+                {
+                    sb.Append(c);
+                    int newValue = IPV6
+                        ? int.Parse(sb.ToString(), NumberStyles.HexNumber, CultureInfo.InvariantCulture)
+                        : int.Parse(sb.ToString());
+                    if (IPV6) int.TryParse(sb.ToString(), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out newValue);
+                    else int.TryParse(sb.ToString(), out newValue);
+                    if (newValue > (IPV6 ? 0xffff : 0xff))
+                    {
+                        sb.Remove(sb.Length - 1, 1);
+                        break;
+                    }
+                    value = newValue;
+                }
+                int cursor = CaretIndex;
+                string newText = Text.Substring(0, Start)
+                    + (IPV6 ? value > 0 ? value.ToString("X4") : string.Empty : value.ToString())
+                    + Text.Substring(Start + Length, Text.Length - (Start + Length));
+                if (newText != Text)
+                {
+                    int newCursor = cursor > Start + Length
+                        ? cursor + (newText.Length - Text.Length)
+                        : cursor;
+                    Text = newText;
+                    _control._normalizing = true;
+                    CaretIndex = newCursor;
+                    _control._normalizing = false;
+                }
+            }
+
+            public bool Insert(char digitChar)
+            {
+                // Save original value in case we have to revert.
+                string originalText = Text;
+                int currentCursor = CaretIndex;
+
+                bool result = false;
+                if (SelectionLength > 0)
+                {
+                    _control.HandleDeleteAndBackspace();
+                }
+
+                // Handle leading zeros for IPV4.
+                if (!IPV6 && ToString().FirstOrDefault() == '0')
+                {
+                    result = true;
+                    if (digitChar != '0')
+                    {
+                        Replace(digitChar, Start);
+                    }
+                    else
+                    {
+                        _control.Error();
+                    }
+                }
+                else if (IPV6 && ToString().Length == 4)
+                {
+                    // So, result is already false, meaning try to add a separator
+                    // and continue after.
+                    // If the cursor is set before the end of the component or
+                    // the entire string length is more than one character past
+                    // the end of the component (one character would be a separator
+                    // then we throw an error and return true.
+                    if (Cursor < Start + Length || Text.Length > Start + Length + 1)
+                    {
+                        _control.Error();
+                        result = true;
+                    }
+                    // Default case 
+                }
+                else
+                {
+                    int currentValue;
+                    string newValue;
+                    newValue = Text.Substring(Start, currentCursor - Start)
+                        + digitChar
+                        + Text.Substring(currentCursor, (Start + Length) - currentCursor);
+                    if (IPV6)
+                    {
+                        int.TryParse(newValue, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out currentValue);
+                    }
+                    else
+                    {
+                        int.TryParse(newValue, out currentValue);
+                    }
+                    if (currentValue <= (IPV6 ? 0xffff : 255))
+                    {
+                        InsertChar(digitChar);
+                        result = true;
+                    }
+                    else if (Cursor < Length)
+                    {
+                        _control.Error();
+                        Text = originalText;
+                        result = true;
+                    }
+                }
+                return result;
+
+                void InsertChar(char c)
+                {
+                    int caretIndex = CaretIndex;
+                    Text = Text.Insert(caretIndex, c.ToString());
+                    CaretIndex = caretIndex + 1;
+                }
+            }
+
+            public void Replace(char c, int index = -1)
+            {
+                int caretIndex = CaretIndex;
+                var sb = new StringBuilder(Text);
+                int position = index == -1 ? caretIndex : index;
+                sb.Remove(position, 1);
+                sb.Insert(position, c);
+                Text = sb.ToString();
+                CaretIndex = caretIndex;
+            }
+
+            public override string ToString()
+            {
+                return Text.Substring(Start, Length);
+            }
+        }
     }
 }
