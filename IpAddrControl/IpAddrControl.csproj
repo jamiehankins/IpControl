@@ -4,6 +4,10 @@
     <TargetFramework>net5.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <RootNamespace>IntruderLeather.Controls.IpAddress</RootNamespace>
+    <Authors>Jamie A Hankins</Authors>
+    <Company>Intruder Leather</Company>
+    <Description>WPF control to smartly allows inputting and displaying an IP address.</Description>
+    <Copyright>2021 Intruder Leather</Copyright>
   </PropertyGroup>
 
 </Project>

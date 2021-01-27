@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Media;
@@ -58,7 +57,7 @@ namespace IntruderLeather.Controls.IpAddress
 
         private char Separator => IPV6 ? ':' : '.';
 
-        private bool CanAddSeparator => Text.Count(c => c == Separator) < 3;
+        private bool CanAddSeparator => Text.Count(c => c == Separator) < (IPV6 ? 6 : 3);
 
         private bool HandleSeparator()
         {
@@ -96,8 +95,8 @@ namespace IntruderLeather.Controls.IpAddress
             {
                 if (CanAddSeparator)
                 {
-                    string zeroComponent = IPV6 ? Separator.ToString() : "0" + Separator;
-                    SetText(Text.Insert(caretIndex, zeroComponent));
+                    string zeroComponent = "0" + Separator;
+                    SetText(Text.Insert(caretIndex, "0" + Separator));
                     CaretIndex = caretIndex + zeroComponent.Length;
                 }
                 else
@@ -325,6 +324,17 @@ namespace IntruderLeather.Controls.IpAddress
         #endregion
 
         public bool IPV6 { get; set; }
+
+        public static readonly DependencyProperty IsValidAddressProperty =
+            DependencyProperty.Register(
+                "IsValidAddress", typeof(bool),
+                typeof(IpAddressControl));
+        public bool IsValidAddress => IPAddress.TryParse(Text, out _);
+
+        public static readonly DependencyProperty IPAddressProperty =
+            DependencyProperty.Register(
+                "IPAddress", typeof(IPAddress),
+                typeof(IpAddressControl));
         public IPAddress IPAddress
         {
             get
@@ -338,6 +348,28 @@ namespace IntruderLeather.Controls.IpAddress
             set
             {
                 Set(value.ToString());
+            }
+        }
+
+        private string CorrectedAddress
+        {
+            // We're going to lean on the functionality that's already there to
+            // make sure we have a valid address. However, it's possible to have
+            // an incomplete address, so we'll fill in a few cases of that here.
+            get
+            {
+                string address = Text;
+                int separators = Text.Count(t => t == Separator);
+                if (separators < 3)
+                {
+                    address += new string(Separator, 3 - separators);
+                }
+                if (IPV6)
+                {
+                    address = address.Replace("..", ".0.");
+                }
+
+                return address;
             }
         }
 
@@ -405,7 +437,7 @@ namespace IntruderLeather.Controls.IpAddress
                 }
                 int cursor = CaretIndex;
                 string newText = Text.Substring(0, Start)
-                    + (IPV6 ? value > 0 ? value.ToString("X4") : string.Empty : value.ToString())
+                    + (IPV6 ? value.ToString("X") : value.ToString())
                     + Text.Substring(Start + Length, Text.Length - (Start + Length));
                 if (newText != Text)
                 {
@@ -431,26 +463,29 @@ namespace IntruderLeather.Controls.IpAddress
                     _control.HandleDeleteAndBackspace();
                 }
 
-                // Handle leading zeros for IPV4.
-                if (!IPV6 && ToString().FirstOrDefault() == '0')
+                // Handle leading zeros.
+                if (ToString().FirstOrDefault() == '0')
                 {
                     result = true;
                     if (digitChar != '0')
                     {
                         Replace(digitChar, Start);
                     }
-                    else
+                    // I think given that a lot of people add leading zeros to hex,
+                    // it would be best not to play the error sound here for IPV6.
+                    else if (!IPV6)
                     {
                         _control.Error();
                     }
                 }
+                // With hex, we can just look at string length.
                 else if (IPV6 && ToString().Length == 4)
                 {
                     // So, result is already false, meaning try to add a separator
                     // and continue after.
                     // If the cursor is set before the end of the component or
                     // the entire string length is more than one character past
-                    // the end of the component (one character would be a separator
+                    // the end of the component (one character would be a separator)
                     // then we throw an error and return true.
                     if (Cursor < Start + Length || Text.Length > Start + Length + 1)
                     {
