@@ -77,7 +77,7 @@
             Grid.Row="8"
             VerticalAlignment="Center" />
         <CheckBox
-            IsChecked="{Binding ElementName=_ipv4, Path=IsValidAddress, Mode=TwoWay}"
+            IsChecked="{Binding ElementName=_ipv4, Path=IsValidAddress, Mode=OneWay}"
             Content="Is Valid"
             Grid.Column="1"
             HorizontalAlignment="Left"
@@ -87,7 +87,7 @@
             Focusable="False"
             VerticalAlignment="Center" />
         <CheckBox
-            IsChecked="{Binding ElementName=_ipV6, Path=IsValidAddress, Mode=TwoWay}"
+            IsChecked="{Binding ElementName=_ipV6, Path=IsValidAddress, Mode=OneWay}"
             Content="Is Valid"
             Grid.Column="1"
             HorizontalAlignment="Left"

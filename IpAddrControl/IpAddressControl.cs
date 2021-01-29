@@ -70,7 +70,7 @@ namespace IntruderLeather.Controls.IpAddress
             {
                 IPAddress = IPAddress.Parse(CorrectedAddress);
             }
-            SetValue(IsValidAddressProperty, IsValidAddress);
+            SetValue(IsValidAddressKey, IsValidAddress);
         }
 
         private char Separator => IPV6 ? ':' : '.';
@@ -166,7 +166,10 @@ namespace IntruderLeather.Controls.IpAddress
                 }
                 else if (!delete && CaretIndex > 0)
                 {
+                    bool suppress = CaretIndex == Text.Length && !_normalizing;
+                    if (suppress) _normalizing = true;
                     --CaretIndex;
+                    if (suppress) _normalizing = false;
                     SelectionLength = 1;
                 }
             }
@@ -174,8 +177,10 @@ namespace IntruderLeather.Controls.IpAddress
             // delete it.
             if (SelectionLength > 0)
             {
+                // Normalize if we're deleting a separator.
                 bool normalize = SelectedText.Any(c => c == Separator)
-                    && SelectionLength < Text.Length;
+                    // Unless the selection extends to the end of the string.
+                    && CaretIndex + SelectionLength < Text.Length;
                 SetSelectedText(string.Empty, normalize);
                 if (normalize)
                 {
@@ -323,10 +328,13 @@ namespace IntruderLeather.Controls.IpAddress
 
         public bool IPV6 { get; set; }
 
-        public static readonly DependencyProperty IsValidAddressProperty =
-            DependencyProperty.Register(
+        private static readonly DependencyPropertyKey IsValidAddressKey =
+            DependencyProperty.RegisterReadOnly(
                 "IsValidAddress", typeof(bool),
-                typeof(IpAddressControl));
+                typeof(IpAddressControl),
+                new PropertyMetadata());
+        public static readonly DependencyProperty IsValidAddressProperty =
+            IsValidAddressKey.DependencyProperty;
         public bool IsValidAddress =>
             Text.Count(c => c == Separator) == NumberOfComponents - 1
             && IPAddress.TryParse(Text, out _);
