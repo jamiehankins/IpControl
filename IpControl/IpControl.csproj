@@ -6,12 +6,14 @@
     <RootNamespace>IntruderLeather.Controls.IpAddress</RootNamespace>
     <Authors>Jamie A Hankins</Authors>
     <Company>Intruder Leather</Company>
-    <Description>WPF control to smartly allows inputting and displaying an IP address.</Description>
+    <Description>WPF control to smartly allow inputting and displaying an IP address.</Description>
     <Copyright>2021 Intruder Leather</Copyright>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageProjectUrl>https://github.com/jamiehankins/IpControl</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jamiehankins/IpControl</RepositoryUrl>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageTags>IP IPV4 IPV6 WPF Control</PackageTags>
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
