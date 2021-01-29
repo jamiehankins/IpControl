@@ -4,6 +4,7 @@ using System.Linq;
 using System.Media;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -55,9 +56,28 @@ namespace IntruderLeather.Controls.IpAddress
             _setting = false;
         }
 
+        private void SetSelectedText(string text, bool pendingNormalization = false)
+        {
+            _setting = !pendingNormalization;
+            SelectedText = text;
+            _setting = false;
+        }
+
+        protected override void OnTextChanged(TextChangedEventArgs e)
+        {
+            base.OnTextChanged(e);
+            if (_setting)
+            {
+                IPAddress = IPAddress.Parse(CorrectedAddress);
+            }
+            SetValue(IsValidAddressProperty, IsValidAddress);
+        }
+
         private char Separator => IPV6 ? ':' : '.';
 
-        private bool CanAddSeparator => Text.Count(c => c == Separator) < (IPV6 ? 6 : 3);
+        private int NumberOfComponents => IPV6 ? 8 : 4;
+
+        private bool CanAddSeparator => Text.Count(c => c == Separator) < NumberOfComponents - 1;
 
         private bool HandleSeparator()
         {
@@ -70,9 +90,9 @@ namespace IntruderLeather.Controls.IpAddress
                 // There either needs to be at least one separator selected or
                 // less than three separators already.
                 if (SelectedText.Contains(Separator)
-                    || Text.Count(c => c == Separator) < 3)
+                    || Text.Count(c => c == Separator) < NumberOfComponents - 1)
                 {
-                    SelectedText = Separator.ToString();
+                    SetSelectedText(Separator.ToString());
                     CaretIndex++;
                     // Incrementing the index gets the previous section formatted,
                     // but we want to format the new section, too.
@@ -124,7 +144,6 @@ namespace IntruderLeather.Controls.IpAddress
             DataObject.AddPastingHandler(this, OnPasting);
             DataObject.AddCopyingHandler(this, OnCopying);
             Dispatcher.ShutdownStarted += OnShutdownStarted;
-            CommandManager.AddPreviewExecutedHandler(this, OnPreviewExecuted);
         }
 
         private void OnShutdownStarted(object sender, EventArgs e)
@@ -132,28 +151,6 @@ namespace IntruderLeather.Controls.IpAddress
             DataObject.RemovePastingHandler(this, OnPasting);
             DataObject.RemoveCopyingHandler(this, OnCopying);
             Dispatcher.ShutdownStarted -= OnShutdownStarted;
-            CommandManager.RemovePreviewExecutedHandler(this, OnPreviewExecuted);
-        }
-
-        private bool _cut = false;
-        private void OnPreviewExecuted(object sender, ExecutedRoutedEventArgs e)
-        {
-            if (e.Command == ApplicationCommands.Cut)
-            {
-                if (SelectionLength == 0)
-                {
-                    SelectAll();
-                }
-                _cut = true;
-            }
-            else if (e.Command == ApplicationCommands.Copy)
-            {
-                if (SelectionLength == 0)
-                {
-                    SelectAll();
-                }
-                _cut = false;
-            }
         }
 
         private bool HandleDeleteAndBackspace(bool delete = true)
@@ -177,8 +174,9 @@ namespace IntruderLeather.Controls.IpAddress
             // delete it.
             if (SelectionLength > 0)
             {
-                bool normalize = SelectedText.Any(c => c == Separator);
-                SelectedText = string.Empty;
+                bool normalize = SelectedText.Any(c => c == Separator)
+                    && SelectionLength < Text.Length;
+                SetSelectedText(string.Empty, normalize);
                 if (normalize)
                 {
                     new AddressComponent(this).Normalize();
@@ -329,7 +327,9 @@ namespace IntruderLeather.Controls.IpAddress
             DependencyProperty.Register(
                 "IsValidAddress", typeof(bool),
                 typeof(IpAddressControl));
-        public bool IsValidAddress => IPAddress.TryParse(Text, out _);
+        public bool IsValidAddress =>
+            Text.Count(c => c == Separator) == NumberOfComponents - 1
+            && IPAddress.TryParse(Text, out _);
 
         public static readonly DependencyProperty IPAddressProperty =
             DependencyProperty.Register(
@@ -341,13 +341,13 @@ namespace IntruderLeather.Controls.IpAddress
             {
                 if (!IPAddress.TryParse(Text, out IPAddress address))
                 {
-                    address = new IPAddress(0);
+                    address = IPAddress.Parse(CorrectedAddress);
                 }
                 return address;
             }
             set
             {
-                Set(value.ToString());
+                SetValue(IPAddressProperty, value);
             }
         }
 
@@ -360,15 +360,14 @@ namespace IntruderLeather.Controls.IpAddress
             {
                 string address = Text;
                 int separators = Text.Count(t => t == Separator);
-                if (separators < 3)
+                if (separators < NumberOfComponents - 1)
                 {
-                    address += new string(Separator, 3 - separators);
+                    address += new string(Separator, NumberOfComponents - 1 - separators);
                 }
-                if (IPV6)
-                {
-                    address = address.Replace("..", ".0.");
-                }
-
+                // Add a zero to empty components.
+                address = address.StartsWith(Separator) ? "0" + address : address;
+                address = address.EndsWith(Separator) ? address + "0" : address;
+                address = Regex.Replace(address, $"(?<=\\{ Separator })\\{ Separator }", $"0{ Separator }");
                 return address;
             }
         }
