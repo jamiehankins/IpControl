@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:ip="clr-namespace:IntruderLeather.Controls.IpAddress;assembly=IpAddrControl"
+    xmlns:ip="clr-namespace:IntruderLeather.Controls.IpAddress;assembly=IpControl"
     xmlns:local="clr-namespace:IpControlHarness"
     mc:Ignorable="d"
     Title="MainWindow"
@@ -38,13 +38,13 @@
             <RowDefinition
                 Height="Auto" />
         </Grid.RowDefinitions>
-        <ip:IpAddressControl
+        <ip:IpControl
             x:Name="_ipv4"
             Grid.Column="0"
             Margin="4"
             Grid.Row="1"
             IPAddress="{Binding Path=IPV4Address, Mode=OneWayToSource}" />
-        <ip:IpAddressControl
+        <ip:IpControl
             x:Name="_ipV6"
             Grid.Row="6"
             Grid.Column="0"

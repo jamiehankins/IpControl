@@ -11,20 +11,20 @@ using System.Windows.Input;
 
 namespace IntruderLeather.Controls.IpAddress
 {
-    public class IpAddressControl : TextBox
+    public class IpControl : TextBox
     {
-        static IpAddressControl()
+        static IpControl()
         {
-            DefaultStyleKeyProperty.OverrideMetadata(typeof(IpAddressControl), new FrameworkPropertyMetadata(typeof(IpAddressControl)));
+            DefaultStyleKeyProperty.OverrideMetadata(typeof(IpControl), new FrameworkPropertyMetadata(typeof(IpControl)));
         }
 
-        public IpAddressControl()
+        public IpControl()
         {
             // Until I work out how to keep undo from getting us into unsupported
             // situations, I'm going to remove undo/redo. The issue is that we do
             // a lot of adding steps to autoformat things when the user is typing.
             // When we allow undo, it sees our changes as individual edits and
-            // and allows the user to undo them without the user change that triggered
+            // allows the user to undo them without the user change that triggered
             // them, which can result in an invalid address. There is functionality
             // to start and end an edit so that undo/redo does it correctly. For that
             // to work, we need to start the edit before the change that triggers the
@@ -331,7 +331,7 @@ namespace IntruderLeather.Controls.IpAddress
         private static readonly DependencyPropertyKey IsValidAddressKey =
             DependencyProperty.RegisterReadOnly(
                 "IsValidAddress", typeof(bool),
-                typeof(IpAddressControl),
+                typeof(IpControl),
                 new PropertyMetadata());
         public static readonly DependencyProperty IsValidAddressProperty =
             IsValidAddressKey.DependencyProperty;
@@ -342,7 +342,7 @@ namespace IntruderLeather.Controls.IpAddress
         public static readonly DependencyProperty IPAddressProperty =
             DependencyProperty.Register(
                 "IPAddress", typeof(IPAddress),
-                typeof(IpAddressControl));
+                typeof(IpControl));
         public IPAddress IPAddress
         {
             get
@@ -383,7 +383,7 @@ namespace IntruderLeather.Controls.IpAddress
         private class AddressComponent
         {
             private int _index;
-            private IpAddressControl _control;
+            private IpControl _control;
             private int Cursor => _index == -1 ? CaretIndex : _index;
             private int CaretIndex
             {
@@ -398,7 +398,7 @@ namespace IntruderLeather.Controls.IpAddress
             private int SelectionLength => _control?.SelectionLength ?? -1;
             private bool IPV6 => _control?.IPV6 ?? false;
 
-            public AddressComponent(IpAddressControl control, int index = -1)
+            public AddressComponent(IpControl control, int index = -1)
             {
                 _control = control;
                 _index = index;
