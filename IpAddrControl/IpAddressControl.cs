@@ -231,7 +231,7 @@ namespace IntruderLeather.Controls.IpAddress
         {
             if (e.Text.Any(c => c == Separator || IsDigit(c)))
             {
-                foreach (char c in e.Text.ToUpper())
+                foreach (char c in e.Text.ToLower())
                 {
                     int caretIndex = CaretIndex;
                     if (c == Separator)
@@ -436,7 +436,7 @@ namespace IntruderLeather.Controls.IpAddress
                 }
                 int cursor = CaretIndex;
                 string newText = Text.Substring(0, Start)
-                    + (IPV6 ? value.ToString("X") : value.ToString())
+                    + (IPV6 ? value.ToString("x") : value.ToString())
                     + Text.Substring(Start + Length, Text.Length - (Start + Length));
                 if (newText != Text)
                 {
