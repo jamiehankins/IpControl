@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 
 namespace IntruderLeather.Controls.IpAddress
@@ -141,15 +142,50 @@ namespace IntruderLeather.Controls.IpAddress
         protected override void OnInitialized(EventArgs e)
         {
             base.OnInitialized(e);
-            DataObject.AddPastingHandler(this, OnPasting);
-            DataObject.AddCopyingHandler(this, OnCopying);
+
+            CommandBinding copyBinding = new CommandBinding(
+                ApplicationCommands.Copy,
+                new ExecutedRoutedEventHandler(OnCommand));
+            CommandBinding pasteBinding = new CommandBinding(
+                ApplicationCommands.Paste,
+                new ExecutedRoutedEventHandler(OnCommand));
+            CommandBindings.AddRange(new[] { copyBinding, pasteBinding });
+
+            AddHandler(
+                CommandManager.PreviewCanExecuteEvent,
+                new CanExecuteRoutedEventHandler(OnPreviewCanExecute), true);
             Dispatcher.ShutdownStarted += OnShutdownStarted;
+        }
+
+        private void OnCommand(object sender, ExecutedRoutedEventArgs e)
+        {
+            if (e.Command == ApplicationCommands.Copy && SelectionLength == 0)
+            {
+                Clipboard.SetText(IPAddress.ToString());
+                e.Handled = true;
+            }
+            else if (e.Command == ApplicationCommands.Paste)
+            {
+                e.Handled = true;
+                if (!Clipboard.ContainsText())
+                {
+                    Error();
+                    return;
+                }
+                else
+                {
+                    string text = Clipboard.GetText(TextDataFormat.UnicodeText);
+                    if (text.Length > 0) Set(text);
+                }
+            }
         }
 
         private void OnShutdownStarted(object sender, EventArgs e)
         {
             DataObject.RemovePastingHandler(this, OnPasting);
-            DataObject.RemoveCopyingHandler(this, OnCopying);
+            RemoveHandler(
+                CommandManager.PreviewCanExecuteEvent,
+                new CanExecuteRoutedEventHandler(OnPreviewCanExecute));
             Dispatcher.ShutdownStarted -= OnShutdownStarted;
         }
 
@@ -229,6 +265,10 @@ namespace IntruderLeather.Controls.IpAddress
                     e.Handled = handled = true;
                 }
             }
+            if (e.Key == Key.C)
+            {
+                Console.WriteLine("here");
+            }
             if (!handled) base.OnPreviewKeyDown(e);
         }
 
@@ -271,7 +311,12 @@ namespace IntruderLeather.Controls.IpAddress
                             }
                         }
                     }
+                    else Error();
                 }
+            }
+            else
+            {
+                Error();
             }
             e.Handled = true;
         }
@@ -307,7 +352,11 @@ namespace IntruderLeather.Controls.IpAddress
         private void OnPasting(object sender, DataObjectPastingEventArgs e)
         {
             var isText = e.SourceDataObject.GetDataPresent(DataFormats.UnicodeText, true);
-            if (!isText) return;
+            if (!isText)
+            {
+                Error();
+                return;
+            }
             var text = e.SourceDataObject.GetData(DataFormats.UnicodeText) as string;
             if (SelectionLength == 0)
             {
@@ -317,11 +366,13 @@ namespace IntruderLeather.Controls.IpAddress
             e.CancelCommand();
         }
 
-        private void OnCopying(object sender, DataObjectCopyingEventArgs e)
+        private void OnPreviewCanExecute(object sender, RoutedEventArgs e)
         {
-            if (SelectionLength == 0)
+            if (e is CanExecuteRoutedEventArgs ce
+                && ce.Command == ApplicationCommands.Copy)
             {
-
+                ce.Handled = true;
+                ce.CanExecute = true;
             }
         }
         #endregion
@@ -359,6 +410,7 @@ namespace IntruderLeather.Controls.IpAddress
             }
         }
 
+        // TODO: It turns out there's a lot more nonsense to do. See this: https://blog.dave.tf/post/ip-addr-parsing/
         private string CorrectedAddress
         {
             // We're going to lean on the functionality that's already there to
@@ -366,16 +418,24 @@ namespace IntruderLeather.Controls.IpAddress
             // an incomplete address, so we'll fill in a few cases of that here.
             get
             {
-                string address = Text;
-                int separators = Text.Count(t => t == Separator);
-                if (separators < NumberOfComponents - 1)
+                string address;
+                if (!IPAddress.TryParse(Text, out IPAddress addr))
                 {
-                    address += new string(Separator, NumberOfComponents - 1 - separators);
+                    address = Text;
+                    int separators = Text.Count(t => t == Separator);
+                    if (separators < NumberOfComponents - 1)
+                    {
+                        address = new string(Separator, NumberOfComponents - 1 - separators) + address;
+                    }
+                    // Add a zero to empty components.
+                    address = address.StartsWith(Separator) ? "0" + address : address;
+                    address = address.EndsWith(Separator) ? address + "0" : address;
+                    address = Regex.Replace(address, $"(?<=\\{ Separator })\\{ Separator }", $"0{ Separator }");
                 }
-                // Add a zero to empty components.
-                address = address.StartsWith(Separator) ? "0" + address : address;
-                address = address.EndsWith(Separator) ? address + "0" : address;
-                address = Regex.Replace(address, $"(?<=\\{ Separator })\\{ Separator }", $"0{ Separator }");
+                else
+                {
+                    address = addr.ToString();
+                }
                 return address;
             }
         }
