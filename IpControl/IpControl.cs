@@ -265,6 +265,11 @@ namespace IntruderLeather.Controls.IpAddress
                     e.Handled = handled = true;
                 }
             }
+            if (e.Key == Key.Space)
+            {
+                Error();
+                e.Handled = handled = true;
+            }
             if (e.Key == Key.C)
             {
                 Console.WriteLine("here");
